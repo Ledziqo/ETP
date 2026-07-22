@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import discoveryData from "./data/publicDiscovery.json";
 
 type Listing = {
+  id: string;
   name: string;
   category: string;
   city: string;
@@ -37,6 +39,54 @@ const listings: Listing[] = [
 
 const cities = ["Addis Ababa", "Bishoftu", "Hawassa", "Adama", "Dire Dawa", "Mekelle"];
 
+const liveRecords = discoveryData as Array<Record<string, string>>;
+const isBusinessRecord = (item: Record<string, string>) => {
+  const title = `${item.name || ""} ${item.category || ""}`.toLowerCase().trim();
+  return title && !/companies? in ethiopia|businesses in ethiopia|exporters? .*(companies|supplier)|supplier companies|contact us|^2merkato$|^engocha ethiopian marketplace$/.test(title);
+};
+const classifyCategory = (item: Record<string, string>) => {
+  const text = `${item.name || ""} ${item.category || ""} ${item.subcategory || ""} ${item.description || ""}`.toLowerCase();
+  if (/restaurant|cafe|coffee|hotel|resort|lodge|guest house/.test(text)) return /hotel|resort|lodge|guest house/.test(text) ? "Hotels & stays" : "Restaurants";
+  if (/law|attorney|legal/.test(text)) return "Law & attorneys";
+  if (/plumb|pipe|water system/.test(text)) return "Plumbing";
+  if (/agric|farm|fertiliz|seed|livestock|animal feed|coffee|grain|flower|dairy/.test(text)) return "Agriculture";
+  if (/manufactur|factory|industrial|aluminium|chemical|building material/.test(text)) return "Manufacturers";
+  if (/electronic|computer|mobile|telecom/.test(text)) return "Electronics";
+  if (/wholesale|supplier|distributor|exporter|importer/.test(text)) return "Wholesale";
+  if (/repair|maintenance|service center/.test(text)) return "Repair services";
+  if (/medical|hospital|clinic|pharmacy|health/.test(text)) return "Health & medical";
+  if (/school|education|college|university|training/.test(text)) return "Education";
+  if (/real estate|property|house for sale|rent/.test(text)) return "Real estate";
+  if (/beauty|cosmetic|salon|spa/.test(text)) return "Beauty & wellness";
+  if (/travel|tour|hotel|ticket|car rental/.test(text)) return "Travel & tourism";
+  return item.category || "Professional services";
+};
+const liveListings: Listing[] = liveRecords.filter(isBusinessRecord).map((item, index) => ({
+  id: item.external_id || `${item.source || "source"}-${index}`,
+  name: item.name,
+  category: classifyCategory(item),
+  city: item.city,
+  neighborhood: item.neighborhood || item.address || "Ethiopia",
+  rating: item.rating || "",
+  reviews: item.review_count || "",
+  image: item.image_url_1 || "",
+  badge: item.source === "OpenStreetMap" ? "Open data" : "Draft listing",
+  phone: item.phone || "",
+  hours: item.opening_hours || "",
+  description: item.description || `${item.subcategory || item.category} in ${item.city}.`,
+  color: ["sage", "gold", "terracotta", "plum"][index % 4],
+  website: item.website || "",
+  source: item.source || "Public source",
+}));
+const liveCategoryIcons: Record<string, string> = { Restaurants: "🍽️", "Hotels & stays": "🏨", Shopping: "🛍️", Manufacturers: "🏭", "Real estate": "🏠", Agriculture: "🌾", Electronics: "💻", Wholesale: "📦", "Repair services": "🔧", "Pet care": "🐾", "Law & attorneys": "⚖️", Plumbing: "🚰", "Health & medical": "🩺", "Professional services": "💼", Education: "🎓", "Finance & insurance": "💳", "Travel & tourism": "🧭", Nightlife: "🎵", "Beauty & wellness": "💆", Automotive: "🚗", Construction: "🏗️", "Government services": "🏛️" };
+const agricultureSubcategories = Array.from(new Set(liveRecords
+  .filter((item) => /agric|dairy|animal feed|coffee|flower|fruit|vegetable|fertilizer|seed/i.test(`${item.name} ${item.category}`))
+  .map((item) => (item.category || item.name).replace(/^Exporters\s+/i, "").replace(/\s+Companies.*$/i, "").trim())
+  .filter((item) => item && item.length < 70))).slice(0, 18);
+const liveCategories = Object.keys(liveCategoryIcons).map((name) => [liveCategoryIcons[name], name, name === "Agriculture" && agricultureSubcategories.length ? `${agricultureSubcategories.length} subcategories` : `${liveListings.filter((item) => item.category === name).length} places`]);
+const liveCities = Array.from(new Set(["All Ethiopia", ...liveListings.map((item) => item.city).filter(Boolean)])).slice(0, 11);
+const featuredListings = [...liveListings.filter((item) => item.image), ...liveListings.filter((item) => !item.image)].slice(0, 3);
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [city, setCity] = useState("All Ethiopia");
@@ -44,12 +94,13 @@ export default function Home() {
   const [language, setLanguage] = useState("EN");
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const filtered = useMemo(() => listings.filter((item) => {
+  const filtered = useMemo(() => liveListings.filter((item) => {
     const searchable = `${item.name} ${item.category} ${item.city} ${item.neighborhood}`.toLowerCase();
     return (!query || searchable.includes(query.toLowerCase())) &&
       (city === "All Ethiopia" || item.city === city) &&
       (activeCategory === "All" || item.category === activeCategory);
   }), [query, city, activeCategory]);
+  const showAgricultureSubcategories = activeCategory === "Agriculture" && agricultureSubcategories.length > 0;
 
   const runSearch = (event: React.FormEvent) => event.preventDefault();
 
@@ -73,18 +124,18 @@ export default function Home() {
           <h1>Find your <em>people.</em><br />Find your place.</h1>
           <p className="hero-copy">The trusted directory for discovering the businesses, services and experiences that make Ethiopia extraordinary.</p>
           <form className="search-bar" onSubmit={runSearch}>
-            <span className="search-icon">⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search restaurants, hotels, salons..." aria-label="Search businesses" /><span className="search-divider" /><span className="pin-icon">⌖</span><select value={city} onChange={(e) => setCity(e.target.value)} aria-label="Choose a city"><option>All Ethiopia</option>{cities.map((item) => <option key={item}>{item}</option>)}</select><button type="submit">Search</button>
+            <span className="search-icon">⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search restaurants, hotels, salons..." aria-label="Search businesses" /><span className="search-divider" /><span className="pin-icon">⌖</span><select value={city} onChange={(e) => setCity(e.target.value)} aria-label="Choose a city">{liveCities.map((item) => <option key={item}>{item}</option>)}</select><button type="submit">Search</button>
           </form>
-          <div className="popular"><span>Popular:</span>{["Restaurants", "Hotels", "Beauty", "Nightlife"].map((item) => <button key={item} onClick={() => setActiveCategory(item === "Hotels" ? "Hotels & stays" : item === "Beauty" ? "Beauty & wellness" : item)}>{item}</button>)}</div>
-          <div className="hero-proof"><div className="avatar-stack"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></div><span><strong>10,000+</strong> places to discover <b>·</b> <strong>All across Ethiopia</strong></span></div>
+          <div className="popular"><span>Popular:</span>{["Restaurants", "Hotels & stays", "Shopping", "Health & medical"].map((item) => <button key={item} onClick={() => setActiveCategory(item)}>{item}</button>)}</div>
+          <div className="hero-proof"><div className="avatar-stack"><i>✦</i><i>✦</i><i>✦</i><i>✦</i></div><span><strong>Explore Ethiopia</strong> <b>·</b> <strong>Directory coming soon</strong></span></div>
         </div>
       </section>
 
-      <section className="section container" id="categories"><div className="section-heading"><div><span className="kicker">Browse by interest</span><h2>What are you looking for?</h2></div><a className="text-link" href="#explore">View all categories <span>↗</span></a></div><div className="category-grid">{categories.map(([icon, name, count]) => <button className="category-card" key={name} onClick={() => { setActiveCategory(name); document.getElementById("explore")?.scrollIntoView({ behavior: "smooth" }); }}><span className="category-icon">{icon}</span><span className="category-name">{name}</span><span className="category-count">{count}</span><span className="category-arrow">↗</span></button>)}</div></section>
+      <section className="section container" id="categories"><div className="section-heading"><div><span className="kicker">Browse by interest</span><h2>What are you looking for?</h2></div><a className="text-link" href="#explore">View all categories <span>↗</span></a></div><div className="category-grid">{liveCategories.map(([icon, name, count]) => <button className="category-card" key={name} onClick={() => { setActiveCategory(name); document.getElementById("explore")?.scrollIntoView({ behavior: "smooth" }); }}><span className="category-icon">{icon}</span><span className="category-name">{name}</span><span className="category-count">{count}</span><span className="category-arrow">↗</span></button>)}</div>{agricultureSubcategories.length > 0 && <div className="subcategory-panel"><span className="kicker">Agriculture directory</span><h3>Browse agricultural sectors</h3><div className="subcategory-list">{agricultureSubcategories.map((item) => <button key={item} onClick={() => { setQuery(item); setActiveCategory("Agriculture"); document.getElementById("explore")?.scrollIntoView({ behavior: "smooth" }); }}>{item} <span>↗</span></button>)}</div></div>}</section>
 
-      <section className="featured-band" id="featured"><div className="container"><div className="section-heading light"><div><span className="kicker">Handpicked for you</span><h2>Places worth knowing.</h2></div><a className="text-link" href="#explore">See all places <span>↗</span></a></div><div className="listing-grid">{listings.slice(0, 3).map((item) => <ListingCard item={item} key={item.name} />)}</div></div></section>
+      <section className="featured-band" id="featured"><div className="container"><div className="section-heading light"><div><span className="kicker">Public-source discovery test</span><h2>Places worth knowing.</h2></div><a className="text-link" href="#explore">See all places <span>↗</span></a></div><div className="listing-grid">{featuredListings.map((item) => <ListingCard item={item} key={item.id} />)}</div></div></section>
 
-      <section className="section container explore-section" id="explore"><div className="section-heading"><div><span className="kicker">Explore the directory</span><h2>{activeCategory === "All" ? "Popular near you" : activeCategory}</h2></div><div className="filter-row"><button className={`filter ${activeCategory === "All" ? "selected" : ""}`} onClick={() => setActiveCategory("All")}>All places</button><button className="filter" onClick={() => setActiveCategory("Restaurants")}>Open now <span>⌄</span></button></div></div>{filtered.length ? <div className="listing-grid">{filtered.map((item) => <ListingCard item={item} key={item.name} />)}</div> : <div className="empty-state"><span>⌕</span><h3>No places found</h3><p>Try a different search or city.</p><button onClick={() => { setQuery(""); setCity("All Ethiopia"); setActiveCategory("All"); }}>Clear filters</button></div>}</section>
+      <section className="section container explore-section" id="explore"><div className="section-heading"><div><span className="kicker">Explore the directory</span><h2>{activeCategory === "All" ? "Popular near you" : activeCategory}</h2></div><div className="filter-row"><button className={`filter ${activeCategory === "All" ? "selected" : ""}`} onClick={() => setActiveCategory("All")}>All places</button><button className="filter" onClick={() => setActiveCategory("Restaurants")}>Open now <span>⌄</span></button></div></div>{filtered.length ? <><div className="result-note">Showing {Math.min(filtered.length, 120)} of {filtered.length} imported draft listings</div><div className="listing-grid">{filtered.slice(0, 120).map((item) => <ListingCard item={item} key={item.id} />)}</div></> : showAgricultureSubcategories ? <div className="subcategory-panel"><span className="kicker">Agriculture directory</span><h3>Select an agricultural sector</h3><p>These are source categories awaiting individual business listings.</p><div className="subcategory-list">{agricultureSubcategories.map((item) => <button key={item} onClick={() => setQuery(item)}>{item} <span>↗</span></button>)}</div></div> : <div className="empty-state"><span>⌕</span><h3>No places found</h3><p>Try a different search or city.</p><button onClick={() => { setQuery(""); setCity("All Ethiopia"); setActiveCategory("All"); }}>Clear filters</button></div>}</section>
 
       <section className="city-section" id="cities"><div className="container city-inner"><div><span className="kicker">Everywhere you go</span><h2>Explore Ethiopia<br /><em>your way.</em></h2><p>From the energy of Addis to lakeside Hawassa, find the local places that make every city feel like home.</p><a className="dark-link" href="#explore">Explore all cities <span>↗</span></a></div><div className="city-list">{cities.map((item, index) => <button key={item} onClick={() => { setCity(item); document.getElementById("explore")?.scrollIntoView({ behavior: "smooth" }); }}><span>0{index + 1}</span><strong>{item}</strong><i>↗</i></button>)}</div></div></section>
 
@@ -96,5 +147,5 @@ export default function Home() {
 }
 
 function ListingCard({ item }: { item: Listing }) {
-  return <article className="listing-card"><div className="listing-image"><img src={item.image} alt={item.name} /><span className={`image-tag ${item.color}`}>{item.badge || "Verified"}</span><button className="save-button" aria-label={`Save ${item.name}`}>♡</button></div><div className="listing-body"><div className="listing-meta"><span>{item.category}</span><span>·</span><span>{item.city}</span></div><h3>{item.name}</h3><p>{item.description}</p><div className="listing-rating"><strong>★ {item.rating}</strong><span>({item.reviews} reviews)</span><span className="open-status">● {item.hours}</span></div><div className="listing-footer"><span>⌖ {item.neighborhood}</span><a href={`tel:${item.phone || ""}`}>View details <span>↗</span></a></div></div></article>;
+  return <article className="listing-card"><div className={`listing-image ${item.image ? "" : "no-photo"}`}>{item.image ? <img src={item.image} alt={item.name} onError={(event) => { event.currentTarget.style.display = "none"; event.currentTarget.parentElement?.classList.add("no-photo"); }} /> : <span className="no-photo-label">No source photo</span>}<span className={`image-tag ${item.color}`}>{item.badge || "Verified"}</span><button className="save-button" aria-label={`Save ${item.name}`}>♡</button></div><div className="listing-body"><div className="listing-meta"><span>{item.category}</span><span>·</span><span>{item.city}</span></div><h3>{item.name}</h3><p>{item.description}</p><div className="listing-rating"><strong>{item.rating ? `★ ${item.rating}` : "Draft listing"}</strong><span>{item.reviews ? `(${item.reviews} reviews)` : "Public source"}</span><span className="open-status">● {item.hours || "Hours unavailable"}</span></div><div className="listing-footer"><span>⌖ {item.neighborhood}</span><a href={item.website || `tel:${item.phone || ""}`} target={item.website ? "_blank" : undefined} rel={item.website ? "noreferrer" : undefined}>View details <span>↗</span></a></div></div></article>;
 }
