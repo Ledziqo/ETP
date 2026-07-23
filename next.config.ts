@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "export",
+  /* Hostinger web-app deployment runs the Vinext server directly. */
 };
 
 export default nextConfig;
