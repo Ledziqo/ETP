@@ -4,10 +4,10 @@ import { useMemo, useState } from "react";
 import discoveryData from "./data/publicDiscovery.json";
 
 type Listing = {
-  id: string;
+  id?: string;
   name: string;
   category: string;
-  subcategory: string;
+  subcategory?: string;
   city: string;
   neighborhood: string;
   rating: string;
@@ -18,6 +18,8 @@ type Listing = {
   hours: string;
   description: string;
   color: string;
+  website?: string;
+  source?: string;
 };
 
 const categories = [
@@ -87,7 +89,7 @@ const agricultureSubcategories = Array.from(new Set(liveRecords
   .filter((item) => /agric|dairy|animal feed|coffee|flower|fruit|vegetable|fertilizer|seed/i.test(`${item.name} ${item.category}`))
   .map((item) => (item.category || item.name).replace(/^Exporters\s+/i, "").replace(/\s+Companies.*$/i, "").trim())
   .filter((item) => item && item.length < 70))).slice(0, 18);
-const categorySubcategories = Object.fromEntries(Object.keys(liveCategoryIcons).map((name) => [name, Array.from(new Set(liveListings.filter((item) => item.category === name && item.subcategory).map((item) => item.subcategory))).sort()]));
+const categorySubcategories = Object.fromEntries(Object.keys(liveCategoryIcons).map((name) => [name, Array.from(new Set(liveListings.filter((item) => item.category === name && item.subcategory).map((item) => item.subcategory as string))).sort()]));
 const liveCategories = Object.keys(liveCategoryIcons).map((name) => [liveCategoryIcons[name], name, `${liveListings.filter((item) => item.category === name).length} places`]);
 const liveCities = Array.from(new Set(["All Ethiopia", ...liveListings.map((item) => item.city).filter(Boolean)])).slice(0, 11);
 const featuredListings = [...liveListings.filter((item) => item.image), ...liveListings.filter((item) => !item.image)].slice(0, 3);
